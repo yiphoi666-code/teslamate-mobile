@@ -14,6 +14,7 @@ services:
   reader:
     build:
       context: .
+    # Local smoke-test tag only; production add-on deployment builds from docker-compose.reader.yml.
     image: garage-lens/teslamate-reader-api:local-test
     restart: unless-stopped
     environment:

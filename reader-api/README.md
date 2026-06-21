@@ -27,6 +27,8 @@ Reader is designed as a TeslaMate add-on:
 
 This matches the common TeslaMate Docker deployment shape documented by TeslaMate: `teslamate`, `database`, `grafana`, and `mosquitto` services on the Compose network.
 
+Reader is currently distributed as source and built locally on the TeslaMate host. Do not run `docker compose pull reader` for this add-on unless you intentionally publish your own image. The provided Compose file builds the Reader image from the local `Dockerfile`, so the container includes its own production `node_modules`; it must not rely on `./node_modules` mounted from the host.
+
 ## Files
 
 ```text
@@ -139,6 +141,21 @@ From the Reader directory:
 docker compose --env-file .env.reader -f docker-compose.reader.yml up -d --build
 ```
 
+Use `--build` when upgrading Reader so Docker rebuilds the local image:
+
+```bash
+docker compose --env-file .env.reader -f docker-compose.reader.yml build --no-cache reader
+docker compose --env-file .env.reader -f docker-compose.reader.yml up -d reader
+```
+
+Do not use:
+
+```bash
+docker compose --env-file .env.reader -f docker-compose.reader.yml pull reader
+```
+
+Reader does not require a public `garage-lens/teslamate-reader-api:latest` image for this deployment flow.
+
 Check logs:
 
 ```bash
@@ -175,6 +192,19 @@ Health:
 
 ```bash
 curl http://localhost:8787/api/health
+```
+
+Lightweight runtime check without a database query:
+
+```bash
+curl http://localhost:8787/api/ping
+```
+
+Token-only check without a database query:
+
+```bash
+curl -H "Authorization: Bearer change-me-to-a-long-random-token" \
+  http://localhost:8787/api/auth/check
 ```
 
 Schema diagnostics:

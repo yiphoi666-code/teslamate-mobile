@@ -9,7 +9,7 @@ const logger = require('./logger');
 const { mapCharge, mapDrive, numberFrom } = require('./mapper');
 
 const app = express();
-const READER_API_VERSION = '0.4.6';
+const READER_API_VERSION = '0.4.7';
 const DEFAULT_RAW_LIMIT = 200;
 const MAX_RAW_LIMIT = 1000;
 

@@ -1,6 +1,6 @@
 # Garage Lens Reader API
 
-Version: `0.4.6`
+Version: `0.4.7`
 
 Garage Lens Reader API is a read-only HTTP API that runs beside a self-hosted TeslaMate deployment. It reads TeslaMate PostgreSQL data and returns JSON for the Garage Lens mobile app.
 

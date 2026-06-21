@@ -2,7 +2,8 @@ services:
   reader:
     build:
       context: .
-    image: garage-lens/teslamate-reader-api:latest
+    # Reader is distributed as source and built locally next to TeslaMate.
+    # Do not run `docker compose pull reader`; no public `latest` image is required.
     restart: unless-stopped
     environment:
       PORT: ${PORT:-8787}

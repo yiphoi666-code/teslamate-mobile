@@ -1,6 +1,6 @@
 {
   "name": "teslamate-reader-api",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "private": true,
   "description": "Read-only JSON API for Garage Lens over a TeslaMate PostgreSQL database.",
   "main": "src/index.js",
