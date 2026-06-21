@@ -25,8 +25,10 @@ class _GarageLensAppState extends State<GarageLensApp> {
   ReaderApiConfig _readerApiConfig = ReaderApiConfig.empty();
   bool _usingRemoteData = false;
   bool _isLocked = false;
+  bool _isRefreshingData = false;
   String? _dataSourceError;
   late Future<TeslamateDashboardData> _dashboardFuture;
+  TeslamateDashboardData? _dashboardData;
 
   @override
   void initState() {
@@ -44,40 +46,105 @@ class _GarageLensAppState extends State<GarageLensApp> {
 
     if (_readerApiConfig.isConfigured) {
       try {
-        final data = await RemoteTeslamateRepository(
-          config: _readerApiConfig,
-        ).loadDashboard();
+        final data = await _loadRemoteDashboardFirstBatch(_readerApiConfig);
         _usingRemoteData = true;
         _isLocked = false;
+        _dashboardData = data;
+        Future<void>.microtask(
+          () => _refreshDashboardBatches(_readerApiConfig),
+        );
         return data;
       } catch (error) {
         _usingRemoteData = false;
-        _isLocked = true;
+        _isLocked = _dashboardData == null;
         _dataSourceError = error.toString();
+        if (_dashboardData != null) {
+          return _dashboardData!;
+        }
       }
     } else {
       _usingRemoteData = false;
       _isLocked = true;
     }
 
-    return LockedTeslamateRepository().loadDashboard();
+    final lockedData = await LockedTeslamateRepository().loadDashboard();
+    _dashboardData = lockedData;
+    return lockedData;
   }
 
   Future<void> _saveReaderApiConfig(ReaderApiConfig config) async {
     final normalized = config.normalized;
     await _configStore.save(normalized);
+    final lockedData = await LockedTeslamateRepository().loadDashboard();
     setState(() {
-      _dashboardFuture = _loadDashboard(overrideConfig: normalized);
+      _readerApiConfig = normalized;
+      _usingRemoteData = true;
+      _isLocked = false;
+      _dataSourceError = null;
+      _dashboardData = lockedData;
+      _dashboardFuture = Future.value(lockedData);
     });
+    _refreshDashboardBatches(normalized);
   }
 
   Future<void> _clearReaderApiConfig() async {
     await _configStore.clear();
     setState(() {
+      _dashboardData = null;
       _dashboardFuture = _loadDashboard(
         overrideConfig: ReaderApiConfig.empty(),
       );
     });
+  }
+
+  Future<TeslamateDashboardData> _loadRemoteDashboardFirstBatch(
+    ReaderApiConfig config,
+  ) async {
+    await for (final data in RemoteTeslamateRepository(
+      config: config,
+    ).loadDashboardBatches()) {
+      return data;
+    }
+
+    throw const ReaderApiException('Reader API did not return dashboard data.');
+  }
+
+  Future<void> _refreshDashboardBatches(ReaderApiConfig config) async {
+    if (_isRefreshingData) {
+      return;
+    }
+
+    setState(() {
+      _isRefreshingData = true;
+      _dataSourceError = null;
+    });
+
+    try {
+      await for (final data in RemoteTeslamateRepository(
+        config: config,
+      ).loadDashboardBatches()) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _dashboardData = data;
+          _dashboardFuture = Future.value(data);
+          _usingRemoteData = true;
+          _isLocked = false;
+        });
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _dataSourceError = error.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshingData = false);
+      }
+    }
   }
 
   @override
@@ -102,6 +169,7 @@ class _GarageLensAppState extends State<GarageLensApp> {
             readerApiConfig: _readerApiConfig,
             usingRemoteData: _usingRemoteData,
             isLocked: _isLocked,
+            isRefreshingData: _isRefreshingData,
             dataSourceError: _dataSourceError,
             onReaderApiConfigSaved: _saveReaderApiConfig,
             onReaderApiConfigCleared: _clearReaderApiConfig,
@@ -118,6 +186,7 @@ class HomeShell extends StatefulWidget {
     required this.readerApiConfig,
     required this.usingRemoteData,
     required this.isLocked,
+    required this.isRefreshingData,
     required this.dataSourceError,
     required this.onReaderApiConfigSaved,
     required this.onReaderApiConfigCleared,
@@ -128,6 +197,7 @@ class HomeShell extends StatefulWidget {
   final ReaderApiConfig readerApiConfig;
   final bool usingRemoteData;
   final bool isLocked;
+  final bool isRefreshingData;
   final String? dataSourceError;
   final Future<void> Function(ReaderApiConfig config) onReaderApiConfigSaved;
   final Future<void> Function() onReaderApiConfigCleared;
@@ -222,7 +292,14 @@ class _HomeShellState extends State<HomeShell> {
         ],
       ),
       body: SafeArea(
-        child: IndexedStack(index: _index, children: pages),
+        child: Column(
+          children: [
+            if (widget.isRefreshingData) const LinearProgressIndicator(),
+            Expanded(
+              child: IndexedStack(index: _index, children: pages),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,

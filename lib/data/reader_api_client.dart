@@ -58,31 +58,42 @@ class ReaderApiClient {
     final response = await _getRaw(
       baseUrl: baseUrl,
       accessToken: accessToken,
-      path: '/api/health',
+      path: '/api/ping',
       timeout: const Duration(seconds: 8),
     );
     return _decodeObject(response);
   }
 
   Future<void> testConnection() async {
-    final health = await testHealth();
-    final status = health['status']?.toString() ?? 'ok';
+    final ping = await testHealth();
+    final status = ping['status']?.toString() ?? 'ok';
     if (status != 'ok') {
       throw ReaderApiException(
         'Reader API is reachable, but not ready: $status.',
       );
     }
 
-    final cars = await _getObjectList(
-      '/api/cars',
+    final auth = await _getObject(
+      '/api/auth/check',
       timeout: const Duration(seconds: 8),
     );
-    if (cars.isEmpty) {
-      throw const ReaderApiException('Reader API did not return any cars.');
+    if (auth['status']?.toString() != 'ok') {
+      throw const ReaderApiException('Reader API token was not accepted.');
     }
   }
 
   Future<TeslamateDashboardData> loadDashboard() async {
+    TeslamateDashboardData? latest;
+    await for (final data in loadDashboardInBatches()) {
+      latest = data;
+    }
+    if (latest == null) {
+      throw ReaderApiException('Reader API did not return dashboard data.');
+    }
+    return latest;
+  }
+
+  Stream<TeslamateDashboardData> loadDashboardInBatches() async* {
     final cars = await _getObjectList(
       '/api/cars',
       timeout: const Duration(seconds: 12),
@@ -92,11 +103,55 @@ class ReaderApiClient {
     }
 
     final carId = _parseId(cars.first['id']);
-    final dashboard = await _getObject(
-      '/api/cars/$carId/overview',
-      timeout: const Duration(seconds: 60),
+    final mapper = _DashboardMapper();
+    final summary = await _getObject(
+      '/api/cars/$carId/summary',
+      timeout: const Duration(seconds: 20),
     );
-    return _DashboardMapper().fromJson(dashboard, carId: carId);
+    var data = mapper.fromJson(summary, carId: carId);
+    yield data;
+
+    try {
+      final drives = await _getObjectList(
+        '/api/cars/$carId/drives?limit=25',
+        timeout: const Duration(seconds: 20),
+      );
+      data = data.copyWith(drives: drives.map(mapper.driveFromJson).toList());
+      yield data;
+    } catch (_) {
+      yield data;
+    }
+
+    try {
+      final charges = await _getObjectList(
+        '/api/cars/$carId/charging/sessions?limit=25',
+        timeout: const Duration(seconds: 20),
+      );
+      data = data.copyWith(
+        charges: charges.map(mapper.chargeFromJson).toList(),
+      );
+      yield data;
+    } catch (_) {
+      yield data;
+    }
+
+    try {
+      final analytics = await _getObject(
+        '/api/cars/$carId/analytics',
+        timeout: const Duration(seconds: 45),
+      );
+      data = data.copyWith(
+        analytics: mapper.analyticsFromJson(
+          analytics,
+          data.monthlyStats,
+          data.drives,
+          data.charges,
+        ),
+      );
+      yield data;
+    } catch (_) {
+      yield data;
+    }
   }
 
   Future<DriveRecord> loadDriveDetail({
@@ -556,6 +611,15 @@ class _DashboardMapper {
         );
       }).toList(),
     );
+  }
+
+  AnalyticsData analyticsFromJson(
+    Object? value,
+    MonthlyStats monthly,
+    List<DriveRecord> drives,
+    List<ChargeSession> charges,
+  ) {
+    return _analytics(value, monthly, drives, charges);
   }
 
   RoutePoint _routePoint(Map<String, dynamic> json) {

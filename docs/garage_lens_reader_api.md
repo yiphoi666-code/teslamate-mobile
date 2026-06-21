@@ -1,6 +1,6 @@
 # Garage Lens Reader API
 
-Version: `0.4.5`
+Version: `0.4.6`
 
 Garage Lens Reader API is a read-only HTTP API that runs beside a self-hosted TeslaMate deployment. It reads TeslaMate PostgreSQL data and returns JSON for the Garage Lens mobile app.
 
@@ -42,12 +42,12 @@ Reader API URL: https://reader.example.com
 Access Token: <token provided by the server owner>
 ```
 
-The app performs:
+The app performs a lightweight connection check first:
 
-1. `GET /api/health`
-2. `GET /api/cars` with bearer token
+1. `GET /api/ping`
+2. `GET /api/auth/check` with bearer token
 
-If both calls pass, Garage Lens saves the URL/token locally and starts loading vehicle data. If validation fails, vehicle data remains hidden.
+If both calls pass, Garage Lens saves the URL/token locally and starts loading vehicle data in batches. If validation fails, vehicle data remains hidden.
 
 ## Authentication
 
@@ -104,10 +104,14 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 | Endpoint | Auth | Purpose |
 | --- | --- | --- |
+| `GET /api/ping` | No | Lightweight Reader status. Does not query PostgreSQL. |
 | `GET /api/health` | No | Reader status, version, database connection summary. |
+| `GET /api/auth/check` | Yes | Lightweight token validation. Does not query PostgreSQL. |
 | `GET /api/diagnostics/schema` | Yes | TeslaMate schema diagnostics and missing table/column checks. |
 | `GET /api/cars` | Yes | List cars available in the TeslaMate database. |
+| `GET /api/cars/:carId/summary` | Yes | First dashboard batch: vehicle, monthly stats, locations, database info, base analytics. |
 | `GET /api/cars/:carId/overview` | Yes | Main dashboard payload for app home, drives, charges, and insights. |
+| `GET /api/cars/:carId/analytics` | Yes | Later dashboard batch: heavier chart and insight data. |
 | `GET /api/cars/:carId/drives?limit=50` | Yes | Recent drives. Max limit: `200`. |
 | `GET /api/cars/:carId/drives/:driveId` | Yes | Drive detail with sampled tracking points. |
 | `GET /api/cars/:carId/drives/:driveId/tracking` | Yes | Drive route/tracking points only. |
@@ -123,7 +127,15 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ## Main Payload: `GET /api/cars/:carId/overview`
 
-This is the primary endpoint used by the app after URL/token validation.
+This endpoint returns the full dashboard payload. Newer Garage Lens builds prefer batch loading:
+
+1. `GET /api/cars`
+2. `GET /api/cars/:carId/summary`
+3. `GET /api/cars/:carId/drives?limit=25`
+4. `GET /api/cars/:carId/charging/sessions?limit=25`
+5. `GET /api/cars/:carId/analytics`
+
+This avoids blocking the app on the heaviest analytics queries.
 
 Top-level shape:
 

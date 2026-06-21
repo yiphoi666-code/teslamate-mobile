@@ -133,7 +133,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Paste your Reader API URL and access token. Data stays hidden until both values pass verification.',
+                  'Paste your Reader API URL and access token. The app verifies these first, then loads TeslaMate data in batches.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 8),

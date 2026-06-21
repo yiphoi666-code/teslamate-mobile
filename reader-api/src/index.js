@@ -9,13 +9,21 @@ const logger = require('./logger');
 const { mapCharge, mapDrive, numberFrom } = require('./mapper');
 
 const app = express();
-const READER_API_VERSION = '0.4.5';
+const READER_API_VERSION = '0.4.6';
 const DEFAULT_RAW_LIMIT = 200;
 const MAX_RAW_LIMIT = 1000;
 
 app.use(cors());
 app.use(express.json());
 app.use(logger.apiLogger);
+
+app.get('/api/ping', async (_req, res) => {
+  res.json({
+    status: 'ok',
+    version: READER_API_VERSION,
+    tokenEnabled: Boolean(config.token),
+  });
+});
 
 app.get('/api/health', async (_req, res) => {
   const database = await db.checkConnection();
@@ -35,6 +43,14 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api', requireBearerToken);
+
+app.get('/api/auth/check', async (_req, res) => {
+  res.json({
+    status: 'ok',
+    version: READER_API_VERSION,
+    tokenAccepted: true,
+  });
+});
 
 app.get('/api/diagnostics/schema', async (_req, res, next) => {
   try {
@@ -58,6 +74,37 @@ app.get('/api/cars', async (_req, res, next) => {
         model: row.model || 'Tesla',
       }))
     );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/cars/:carId/summary', async (req, res, next) => {
+  try {
+    const carId = Number(req.params.carId);
+    const [car, position, monthlyStats, database, dataQuality] = await Promise.all([
+      getCar(carId),
+      getLatestPosition(carId),
+      getMonthlyStats(carId),
+      getDatabaseInfo(),
+      getDataQuality(carId),
+    ]);
+    const resolvedDataQuality = {
+      ...dataQuality,
+      lastHealthyAt: dataQuality.lastHealthyAt || database.latestDataAt,
+    };
+
+    res.json({
+      vehicle: mapVehicle(car, position),
+      monthlyStats,
+      locations: buildLocations(car, position, []),
+      database,
+      analytics: buildAnalytics(monthlyStats, [], [], database, {
+        car,
+        position,
+        dataQuality: resolvedDataQuality,
+      }),
+    });
   } catch (error) {
     next(error);
   }
@@ -125,6 +172,66 @@ app.get('/api/cars/:carId/overview', async (req, res, next) => {
         dataQuality: resolvedDataQuality,
       }),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/cars/:carId/analytics', async (req, res, next) => {
+  try {
+    const carId = Number(req.params.carId);
+    const [
+      car,
+      position,
+      drives,
+      charges,
+      monthlyStats,
+      database,
+      stateTimeline,
+      monthlyMileage,
+      rangeDegradation,
+      chargingCurves,
+      speedRates,
+      speedTemperature,
+      topStations,
+      dataQuality,
+    ] = await Promise.all([
+      getCar(carId),
+      getLatestPosition(carId),
+      getRecentDrives(carId, 25),
+      getRecentCharges(carId, 25),
+      getMonthlyStats(carId),
+      getDatabaseInfo(),
+      getStateTimeline(carId),
+      getMonthlyMileage(carId),
+      getRangeDegradation(carId),
+      getChargingCurves(carId),
+      getSpeedRates(carId),
+      getSpeedTemperature(carId),
+      getTopStations(carId),
+      getDataQuality(carId),
+    ]);
+    const mappedDrives = drives.map((row) => mapDrive(row));
+    const mappedCharges = charges.map((row) => mapCharge(row));
+    const resolvedDataQuality = {
+      ...dataQuality,
+      lastHealthyAt: dataQuality.lastHealthyAt || database.latestDataAt,
+    };
+
+    res.json(
+      buildAnalytics(monthlyStats, mappedDrives, mappedCharges, database, {
+        car,
+        position,
+        stateTimeline,
+        monthlyMileage,
+        rangeDegradation,
+        chargingCurves,
+        speedRates,
+        speedTemperature,
+        topStations,
+        dataQuality: resolvedDataQuality,
+      })
+    );
   } catch (error) {
     next(error);
   }

@@ -3,6 +3,7 @@ import '../models/teslamate_models.dart';
 
 abstract interface class TeslamateRepository {
   Future<TeslamateDashboardData> loadDashboard();
+  Stream<TeslamateDashboardData> loadDashboardBatches();
 }
 
 class RemoteTeslamateRepository implements TeslamateRepository {
@@ -14,6 +15,11 @@ class RemoteTeslamateRepository implements TeslamateRepository {
   @override
   Future<TeslamateDashboardData> loadDashboard() {
     return _client.loadDashboard();
+  }
+
+  @override
+  Stream<TeslamateDashboardData> loadDashboardBatches() {
+    return _client.loadDashboardInBatches();
   }
 }
 
@@ -680,6 +686,11 @@ class MockTeslamateRepository implements TeslamateRepository {
       ),
     );
   }
+
+  @override
+  Stream<TeslamateDashboardData> loadDashboardBatches() async* {
+    yield await loadDashboard();
+  }
 }
 
 class LockedTeslamateRepository implements TeslamateRepository {
@@ -803,5 +814,10 @@ class LockedTeslamateRepository implements TeslamateRepository {
         topStations: const [],
       ),
     );
+  }
+
+  @override
+  Stream<TeslamateDashboardData> loadDashboardBatches() async* {
+    yield await loadDashboard();
   }
 }

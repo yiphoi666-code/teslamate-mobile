@@ -19,6 +19,7 @@ Widget unlockedTestApp(TeslamateDashboardData data) {
       readerApiConfig: ReaderApiConfig.empty(),
       usingRemoteData: true,
       isLocked: false,
+      isRefreshingData: false,
       dataSourceError: null,
       onReaderApiConfigSaved: (_) async {},
       onReaderApiConfigCleared: () async {},

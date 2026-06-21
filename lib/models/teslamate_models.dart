@@ -20,6 +20,28 @@ class TeslamateDashboardData {
   final List<LocationVisit> locations;
   final DatabaseInfo database;
   final AnalyticsData analytics;
+
+  TeslamateDashboardData copyWith({
+    int? carId,
+    VehicleSnapshot? vehicle,
+    MonthlyStats? monthlyStats,
+    List<DriveRecord>? drives,
+    List<ChargeSession>? charges,
+    List<LocationVisit>? locations,
+    DatabaseInfo? database,
+    AnalyticsData? analytics,
+  }) {
+    return TeslamateDashboardData(
+      carId: carId ?? this.carId,
+      vehicle: vehicle ?? this.vehicle,
+      monthlyStats: monthlyStats ?? this.monthlyStats,
+      drives: drives ?? this.drives,
+      charges: charges ?? this.charges,
+      locations: locations ?? this.locations,
+      database: database ?? this.database,
+      analytics: analytics ?? this.analytics,
+    );
+  }
 }
 
 class VehicleSnapshot {

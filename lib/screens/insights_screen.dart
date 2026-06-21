@@ -521,10 +521,10 @@ class _DriveStatsCard extends StatelessWidget {
     final averageSpeed = recentDrives.isEmpty
         ? 0.0
         : recentDrives.fold<double>(
-              0,
-              (sum, drive) => sum + drive.averageSpeedKmh,
-            ) /
-            recentDrives.length;
+                0,
+                (sum, drive) => sum + drive.averageSpeedKmh,
+              ) /
+              recentDrives.length;
     final maxElevationCurve = recentDrives
         .expand((drive) => drive.elevationCurve)
         .fold<double>(0, (max, point) => math.max(max, point.value));
