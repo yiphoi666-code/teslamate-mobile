@@ -1,0 +1,31 @@
+services:
+  reader:
+    build:
+      context: .
+    image: garage-lens/teslamate-reader-api:latest
+    restart: unless-stopped
+    environment:
+      PORT: ${PORT:-8787}
+      READER_API_TOKEN: ${READER_API_TOKEN:?set READER_API_TOKEN in .env.reader}
+      DATABASE_HOST: ${DATABASE_HOST:-database}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-teslamate}
+      DATABASE_USER: ${DATABASE_USER:-teslamate_readonly}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env.reader}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+    ports:
+      - "${READER_API_PORT:-8787}:8787"
+    networks:
+      - teslamate
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+networks:
+  teslamate:
+    external: true
+    name: ${TESLAMATE_DOCKER_NETWORK:-teslamate_default}

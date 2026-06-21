@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Garage Lens Reader API Reference</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7f4;
+      --panel: #ffffff;
+      --text: #17211f;
+      --muted: #596560;
+      --line: #dfe6dd;
+      --brand: #1b7f79;
+      --code: #10201e;
+      --code-bg: #e9efeb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    header {
+      background: #17211f;
+      color: #fff;
+      padding: 40px 20px 34px;
+    }
+    main, .inner {
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.05;
+    }
+    h2 {
+      margin: 34px 0 12px;
+      font-size: 24px;
+    }
+    h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+    p { margin: 0 0 12px; }
+    header p {
+      max-width: 760px;
+      color: rgba(255,255,255,.74);
+      font-size: 17px;
+    }
+    main {
+      padding: 22px 20px 48px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .method {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      color: var(--brand);
+      margin-bottom: 8px;
+    }
+    code, pre {
+      font-family: "Cascadia Mono", Consolas, ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    code {
+      background: var(--code-bg);
+      color: var(--code);
+      padding: 2px 5px;
+      border-radius: 5px;
+      font-size: .92em;
+    }
+    pre {
+      overflow-x: auto;
+      background: #10201e;
+      color: #e9fff8;
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background: #e8efea;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    tr:last-child td { border-bottom: 0; }
+    .pill {
+      display: inline-block;
+      padding: 5px 9px;
+      background: #e8efea;
+      color: var(--muted);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+    .muted { color: var(--muted); }
+    .warning {
+      border-left: 4px solid #b35c00;
+      background: #fff4e6;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>Garage Lens Reader API</h1>
+      <p>Read-only JSON API for Garage Lens over a self-hosted TeslaMate PostgreSQL database. The mobile app only needs a Reader API URL and an access token; PostgreSQL credentials stay on the owner’s server.</p>
+      <span class="pill">Version 0.4.4</span>
+      <span class="pill">Read-only</span>
+      <span class="pill">Bearer token</span>
+    </div>
+  </header>
+  <main>
+    <section class="grid">
+      <div class="card">
+        <h3>Base URL</h3>
+        <p><code>https://reader.example.com</code></p>
+        <p class="muted">Use the HTTPS domain provided by the TeslaMate server owner.</p>
+      </div>
+      <div class="card">
+        <h3>Authentication</h3>
+        <p><code>Authorization: Bearer &lt;access-token&gt;</code></p>
+        <p class="muted"><code>/api/health</code> is public health; data endpoints require the token.</p>
+      </div>
+      <div class="card">
+        <h3>App Validation</h3>
+        <p><code>GET /api/health</code> then <code>GET /api/cars</code></p>
+        <p class="muted">Garage Lens hides all vehicle data until both checks pass.</p>
+      </div>
+    </section>
+
+    <section class="card warning" style="margin-top:16px">
+      <h3>Security Notes</h3>
+      <p>Do not expose PostgreSQL to the public internet. Run Reader beside TeslaMate, use a read-only PostgreSQL user, keep HTTPS enabled, and rotate the Reader token after public testing.</p>
+    </section>
+
+    <h2>Quick Start</h2>
+    <pre><code>curl https://reader.example.com/api/health
+
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://reader.example.com/api/cars
+
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://reader.example.com/api/cars/1/overview</code></pre>
+
+    <h2>Endpoints</h2>
+    <table>
+      <thead>
+        <tr><th>Endpoint</th><th>Purpose</th><th>Used By App</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>GET /api/health</code></td><td>Reader and database health, version, DB connection summary.</td><td>Connection test</td></tr>
+        <tr><td><code>GET /api/diagnostics/schema</code></td><td>Schema readiness and missing TeslaMate tables/columns.</td><td>Admin/debug</td></tr>
+        <tr><td><code>GET /api/cars</code></td><td>Available cars: id, name, model.</td><td>Connection test, dashboard load</td></tr>
+        <tr><td><code>GET /api/cars/:carId/overview</code></td><td>Main dashboard payload: vehicle, monthly stats, recent drives/charges, locations, database info, analytics charts.</td><td>Home, Drives, Charges, Insights</td></tr>
+        <tr><td><code>GET /api/cars/:carId/drives</code></td><td>Recent drive list.</td><td>Future/list refresh</td></tr>
+        <tr><td><code>GET /api/cars/:carId/drives/:driveId</code></td><td>Drive detail with route, speed, elevation, and battery curves.</td><td>Drive detail</td></tr>
+        <tr><td><code>GET /api/cars/:carId/drives/:driveId/tracking</code></td><td>Raw sampled tracking points for a drive.</td><td>Debug/future</td></tr>
+        <tr><td><code>GET /api/cars/:carId/charging/sessions</code></td><td>Recent charging session list.</td><td>Future/list refresh</td></tr>
+        <tr><td><code>GET /api/cars/:carId/charging/sessions/:chargeId</code></td><td>Charge detail with charging power and battery curves.</td><td>Charge detail</td></tr>
+        <tr><td><code>GET /api/cars/:carId/visited-map</code></td><td>Downsampled lifetime route groups.</td><td>Visited map</td></tr>
+        <tr><td><code>GET /api/database/info</code></td><td>Database size, row counts, schema version, first/latest data timestamps.</td><td>System insight</td></tr>
+        <tr><td><code>GET /api/database/settings</code></td><td>TeslaMate settings such as units, preferred range, language, theme.</td><td>Future/settings display</td></tr>
+        <tr><td><code>GET /api/cars/:carId/data-quality</code></td><td>Incomplete drives, incomplete charges, missing positions, last healthy sample.</td><td>Data quality insight</td></tr>
+        <tr><td><code>GET /api/cars/:carId/database/tables</code></td><td>Catalog of vehicle-related raw tables, row counts, columns, date ranges.</td><td>Admin/debug</td></tr>
+        <tr><td><code>GET /api/cars/:carId/database/tables/:tableName</code></td><td>Paginated read-only raw rows for supported vehicle-related tables.</td><td>Admin/debug</td></tr>
+        <tr><td><code>GET /api/cars/:carId/database/export</code></td><td>Limited raw export across detected vehicle-related tables.</td><td>Admin/debug</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Overview Shape</h2>
+    <div class="grid">
+      <div class="card"><h3><code>vehicle</code></h3><p>Display name, model, state, battery, range, odometer, location, temperature, latest sample.</p></div>
+      <div class="card"><h3><code>monthlyStats</code></h3><p>Distance, drive count, energy, charge energy, efficiency, charge cost, online/asleep hours.</p></div>
+      <div class="card"><h3><code>drives</code></h3><p>Recent drive cards with start/end, distance, energy, speed, battery levels.</p></div>
+      <div class="card"><h3><code>charges</code></h3><p>Recent charging sessions with battery delta, kWh, range added, cost, peak power.</p></div>
+      <div class="card"><h3><code>database</code></h3><p>Connection status, row counts, schema version, database size, reader version.</p></div>
+      <div class="card"><h3><code>analytics</code></h3><p>Charging costs, battery capacity/degradation, state timeline, mileage, charging curves, speed/temperature efficiency, top stations.</p></div>
+    </div>
+
+    <h2>Raw Table Query Parameters</h2>
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Default</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>limit</code></td><td><code>200</code></td><td>Rows per page. Maximum <code>1000</code>.</td></tr>
+        <tr><td><code>offset</code></td><td><code>0</code></td><td>Pagination offset.</td></tr>
+        <tr><td><code>order</code></td><td><code>desc</code></td><td><code>asc</code> or <code>desc</code>.</td></tr>
+        <tr><td><code>from</code></td><td>none</td><td>ISO date lower bound when the table has a date/start_date column.</td></tr>
+        <tr><td><code>to</code></td><td>none</td><td>ISO date upper bound when the table has a date/start_date column.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Raw Tables</h2>
+    <p>Reader automatically exposes vehicle-related tables only. This includes direct <code>car_id</code> tables like <code>positions</code>, <code>drives</code>, <code>states</code>, <code>charging_processes</code>; <code>charges</code> through <code>charging_processes.car_id</code>; referenced <code>addresses</code> and <code>geofences</code>; the selected <code>cars</code> row; and compatible future TeslaMate tables.</p>
+  </main>
+</body>
+</html>

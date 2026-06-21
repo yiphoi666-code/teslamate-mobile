@@ -1,0 +1,34 @@
+services:
+  database:
+    image: postgres:18-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: teslamate_readonly
+      POSTGRES_PASSWORD: change-me
+      POSTGRES_DB: teslamate
+    ports:
+      - "15432:5432"
+    volumes:
+      - reader-test-db:/var/lib/postgresql
+
+  reader:
+    build:
+      context: .
+    image: garage-lens/teslamate-reader-api:local-test
+    restart: unless-stopped
+    environment:
+      PORT: 8787
+      READER_API_TOKEN: dev-token
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      DATABASE_NAME: teslamate
+      DATABASE_USER: teslamate_readonly
+      DATABASE_PASSWORD: change-me
+      DATABASE_SSL: "false"
+    ports:
+      - "8787:8787"
+    depends_on:
+      - database
+
+volumes:
+  reader-test-db:
