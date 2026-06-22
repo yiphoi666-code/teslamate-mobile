@@ -20,7 +20,8 @@ class GarageLensApp extends StatefulWidget {
   State<GarageLensApp> createState() => _GarageLensAppState();
 }
 
-class _GarageLensAppState extends State<GarageLensApp> {
+class _GarageLensAppState extends State<GarageLensApp>
+    with WidgetsBindingObserver {
   late final ReaderApiConfigStore _configStore;
   ReaderApiConfig _readerApiConfig = ReaderApiConfig.empty();
   bool _usingRemoteData = false;
@@ -33,8 +34,24 @@ class _GarageLensAppState extends State<GarageLensApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _configStore = widget.configStore ?? ReaderApiConfigStore();
     _dashboardFuture = _loadDashboard();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _readerApiConfig.isConfigured &&
+        !_isLocked) {
+      _refreshDashboardBatches(_readerApiConfig);
+    }
   }
 
   Future<TeslamateDashboardData> _loadDashboard({
@@ -56,11 +73,15 @@ class _GarageLensAppState extends State<GarageLensApp> {
         return data;
       } catch (error) {
         _usingRemoteData = false;
-        _isLocked = _dashboardData == null;
-        _dataSourceError = error.toString();
+        _isLocked = false;
+        _dataSourceError = _friendlyDataSourceError(error);
         if (_dashboardData != null) {
           return _dashboardData!;
         }
+
+        final offlineData = await OfflineTeslamateRepository().loadDashboard();
+        _dashboardData = offlineData;
+        return offlineData;
       }
     } else {
       _usingRemoteData = false;
@@ -136,7 +157,7 @@ class _GarageLensAppState extends State<GarageLensApp> {
         return;
       }
       setState(() {
-        _dataSourceError = error.toString();
+        _dataSourceError = _friendlyDataSourceError(error);
       });
     } finally {
       if (mounted) {
@@ -169,12 +190,19 @@ class _GarageLensAppState extends State<GarageLensApp> {
             isLocked: _isLocked,
             isRefreshingData: _isRefreshingData,
             dataSourceError: _dataSourceError,
+            onReaderApiRefresh: _retryReaderApiRefresh,
             onReaderApiConfigSaved: _saveReaderApiConfig,
             onReaderApiConfigCleared: _clearReaderApiConfig,
           );
         },
       ),
     );
+  }
+
+  void _retryReaderApiRefresh() {
+    if (_readerApiConfig.isConfigured) {
+      _refreshDashboardBatches(_readerApiConfig);
+    }
   }
 }
 
@@ -186,6 +214,7 @@ class HomeShell extends StatefulWidget {
     required this.isLocked,
     required this.isRefreshingData,
     required this.dataSourceError,
+    required this.onReaderApiRefresh,
     required this.onReaderApiConfigSaved,
     required this.onReaderApiConfigCleared,
     super.key,
@@ -197,6 +226,7 @@ class HomeShell extends StatefulWidget {
   final bool isLocked;
   final bool isRefreshingData;
   final String? dataSourceError;
+  final VoidCallback onReaderApiRefresh;
   final Future<void> Function(ReaderApiConfig config) onReaderApiConfigSaved;
   final Future<void> Function() onReaderApiConfigCleared;
 
@@ -293,6 +323,11 @@ class _HomeShellState extends State<HomeShell> {
         child: Column(
           children: [
             if (widget.isRefreshingData) const LinearProgressIndicator(),
+            if (widget.dataSourceError != null)
+              _ConnectionIssueBanner(
+                message: widget.dataSourceError!,
+                onRetry: widget.onReaderApiRefresh,
+              ),
             Expanded(
               child: IndexedStack(index: _index, children: pages),
             ),
@@ -325,6 +360,69 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+String _friendlyDataSourceError(Object error) {
+  final message = error.toString().toLowerCase();
+  if (message.contains('socketexception') ||
+      message.contains('timed out') ||
+      message.contains('connection abort') ||
+      message.contains('connection reset')) {
+    return 'Reader API is temporarily unreachable. Check network or VPN, then try again.';
+  }
+
+  if (message.contains('401') || message.contains('unauthorized')) {
+    return 'Reader API token was not accepted. Check the access token in Settings.';
+  }
+
+  return 'Reader API could not be refreshed. Try again later.';
+}
+
+class _ConnectionIssueBanner extends StatelessWidget {
+  const _ConnectionIssueBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.error.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(Icons.cloud_off, color: scheme.error, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: scheme.error),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Retry'),
+          ),
+        ],
       ),
     );
   }

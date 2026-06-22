@@ -821,3 +821,51 @@ class LockedTeslamateRepository implements TeslamateRepository {
     yield await loadDashboard();
   }
 }
+
+class OfflineTeslamateRepository implements TeslamateRepository {
+  @override
+  Future<TeslamateDashboardData> loadDashboard() async {
+    final locked = await LockedTeslamateRepository().loadDashboard();
+    return locked.copyWith(
+      vehicle: VehicleSnapshot(
+        displayName: 'Offline data',
+        model: 'Waiting for Reader API',
+        state: VehicleState.offline,
+        batteryLevel: locked.vehicle.batteryLevel,
+        usableBatteryLevel: locked.vehicle.usableBatteryLevel,
+        ratedRangeKm: locked.vehicle.ratedRangeKm,
+        idealRangeKm: locked.vehicle.idealRangeKm,
+        odometerKm: locked.vehicle.odometerKm,
+        locationName: 'Network unavailable',
+        latitude: locked.vehicle.latitude,
+        longitude: locked.vehicle.longitude,
+        lastSeen: locked.vehicle.lastSeen,
+        outsideTempC: locked.vehicle.outsideTempC,
+        insideTempC: locked.vehicle.insideTempC,
+        powerKw: locked.vehicle.powerKw,
+        pluggedIn: locked.vehicle.pluggedIn,
+      ),
+      database: DatabaseInfo(
+        connected: false,
+        databaseName: 'reader-api',
+        schemaVersion: 'offline',
+        databaseSizeMb: 0,
+        carRows: 0,
+        driveRows: 0,
+        positionRows: 0,
+        chargeRows: 0,
+        chargingProcessRows: 0,
+        stateRows: 0,
+        geofenceRows: 0,
+        firstDataAt: locked.database.firstDataAt,
+        latestDataAt: locked.database.latestDataAt,
+        readerApiVersion: 'offline',
+      ),
+    );
+  }
+
+  @override
+  Stream<TeslamateDashboardData> loadDashboardBatches() async* {
+    yield await loadDashboard();
+  }
+}

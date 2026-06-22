@@ -21,6 +21,7 @@ Widget unlockedTestApp(TeslamateDashboardData data) {
       isLocked: false,
       isRefreshingData: false,
       dataSourceError: null,
+      onReaderApiRefresh: () {},
       onReaderApiConfigSaved: (_) async {},
       onReaderApiConfigCleared: () async {},
     ),
@@ -81,6 +82,26 @@ void main() {
     expect(find.text('Model Y'), findsNothing);
     expect(find.text('Supercharger Sunnyvale'), findsNothing);
   });
+
+  testWidgets(
+    'keeps configured users out of Connect Reader when refresh fails',
+    (tester) async {
+      await tester.pumpWidget(
+        testApp(
+          initialConfig: const ReaderApiConfig(
+            baseUrl: 'https://reader.example.com',
+            accessToken: 'token',
+          ),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 15));
+      await tester.pump();
+
+      expect(find.text('Connect Reader'), findsNothing);
+      expect(find.text('Overview'), findsWidgets);
+      expect(find.text('Retry'), findsOneWidget);
+    },
+  );
 
   testWidgets('loads unlocked dashboard and navigates to charging', (
     tester,
