@@ -75,16 +75,14 @@ class _GarageLensAppState extends State<GarageLensApp> {
   Future<void> _saveReaderApiConfig(ReaderApiConfig config) async {
     final normalized = config.normalized;
     await _configStore.save(normalized);
-    final lockedData = await LockedTeslamateRepository().loadDashboard();
     setState(() {
       _readerApiConfig = normalized;
-      _usingRemoteData = true;
+      _usingRemoteData = false;
       _isLocked = false;
+      _isRefreshingData = false;
       _dataSourceError = null;
-      _dashboardData = lockedData;
-      _dashboardFuture = Future.value(lockedData);
+      _dashboardFuture = _loadDashboard(overrideConfig: normalized);
     });
-    _refreshDashboardBatches(normalized);
   }
 
   Future<void> _clearReaderApiConfig() async {

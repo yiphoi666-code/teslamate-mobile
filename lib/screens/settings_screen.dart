@@ -35,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _urlController;
   late final TextEditingController _tokenController;
   bool _testing = false;
+  bool _testSucceeded = false;
   String? _testMessage;
 
   @override
@@ -56,8 +57,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _testAndSaveReaderApi() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _testing = true;
+      _testSucceeded = false;
       _testMessage = null;
     });
 
@@ -65,6 +68,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final config = _typedConfig();
       final client = ReaderApiClient(config: config);
       await client.testConnection();
+      if (mounted) {
+        setState(() {
+          _testSucceeded = true;
+          _testMessage = 'Reader verified. Loading vehicle data...';
+        });
+      }
       await widget.onReaderApiConfigSaved(config);
 
       if (mounted && widget.closeOnSuccess && Navigator.of(context).canPop()) {
@@ -73,6 +82,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (error) {
       if (mounted) {
         setState(() {
+          _testSucceeded = false;
           _testMessage = 'Connection failed: $error';
         });
       }
@@ -182,6 +192,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (_testMessage != null) ...[
+                  _ConnectionStatusMessage(
+                    succeeded: _testSucceeded,
+                    message: _testMessage!,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
@@ -203,13 +220,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-                if (_testMessage != null) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    _testMessage!,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
               ],
             ),
           ),
@@ -280,5 +290,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     return 'Data hidden';
+  }
+}
+
+class _ConnectionStatusMessage extends StatelessWidget {
+  const _ConnectionStatusMessage({
+    required this.succeeded,
+    required this.message,
+  });
+
+  final bool succeeded;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = succeeded ? scheme.primary : scheme.error;
+    final background = succeeded
+        ? scheme.primaryContainer.withValues(alpha: 0.35)
+        : scheme.errorContainer.withValues(alpha: 0.35);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            succeeded ? Icons.check_circle_outline : Icons.error_outline,
+            color: color,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
