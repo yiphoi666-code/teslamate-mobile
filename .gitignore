@@ -32,6 +32,8 @@ yarn-error.log*
 
 # Generated release artifacts
 *.apk
+!release-apk/
+!release-apk/*.apk
 *.aab
 *.ipa
 *.app
