@@ -79,8 +79,50 @@ void main() {
     expect(find.text('Reader API URL'), findsOneWidget);
     expect(find.text('Access token'), findsOneWidget);
     expect(find.text('Test & Save'), findsOneWidget);
+    expect(find.text('Clear connection'), findsNothing);
     expect(find.text('Model Y'), findsNothing);
     expect(find.text('Supercharger Sunnyvale'), findsNothing);
+  });
+
+  testWidgets('accepts Reader URL and token input before verification', (
+    tester,
+  ) async {
+    await pumpGarageLens(tester);
+
+    await tester.enterText(
+      find.byType(EditableText).at(0),
+      'https://reader.example.com',
+    );
+    await tester.enterText(find.byType(EditableText).at(1), 'token');
+    await tester.pump();
+
+    final urlField = tester.widget<TextField>(find.byType(TextField).at(0));
+    final tokenField = tester.widget<TextField>(find.byType(TextField).at(1));
+
+    expect(urlField.controller?.text, 'https://reader.example.com');
+    expect(tokenField.controller?.text, 'token');
+    expect(find.text('Data hidden'), findsWidgets);
+  });
+
+  testWidgets('rejects invalid Reader URL before saving', (tester) async {
+    await pumpGarageLens(tester);
+
+    await tester.enterText(find.byType(EditableText).at(0), 'not-a-url');
+    await tester.enterText(find.byType(EditableText).at(1), 'token');
+    await tester.ensureVisible(find.text('Test & Save'));
+    await tester.pump();
+    await tester.tap(find.text('Test & Save'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+
+    expect(
+      find.text(
+        'Connection failed: Enter a valid http or https Reader API URL.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Connect Reader'), findsOneWidget);
+    expect(find.text('Data hidden'), findsWidgets);
   });
 
   testWidgets(
