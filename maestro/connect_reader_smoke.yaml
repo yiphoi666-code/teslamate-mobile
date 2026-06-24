@@ -1,0 +1,13 @@
+appId: com.kaylabs.teslamate_mobile
+---
+- clearState
+- launchApp
+- assertVisible: "Connect Reader"
+- assertVisible: "TeslaMate Reader API"
+- assertVisible: "Reader API URL"
+- assertVisible: "Access token"
+- tapOn: "Reader API URL"
+- inputText: "https://reader.example.com"
+- tapOn: "Access token"
+- inputText: "token"
+- assertVisible: "Test & Save"

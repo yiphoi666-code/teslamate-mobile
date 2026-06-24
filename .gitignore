@@ -4,6 +4,8 @@
 !.env.example
 !.env.reader.example
 *.ps1
+!scripts/
+!scripts/*.ps1
 
 # Flutter/Dart
 .dart_tool/

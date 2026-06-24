@@ -213,11 +213,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           : const Icon(Icons.cloud_sync),
                       label: Text(_testing ? 'Testing' : 'Test & Save'),
                     ),
-                    TextButton.icon(
-                      onPressed: _testing ? null : _clearConnection,
-                      icon: const Icon(Icons.lock_reset),
-                      label: const Text('Clear connection'),
-                    ),
+                    if (widget.readerApiConfig.isConfigured)
+                      TextButton.icon(
+                        onPressed: _testing ? null : _clearConnection,
+                        icon: const Icon(Icons.lock_reset),
+                        label: const Text('Clear connection'),
+                      ),
                   ],
                 ),
               ],
