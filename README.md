@@ -6,7 +6,7 @@ A Flutter Android app for viewing self-hosted TeslaMate data.
 
 Download the latest Android APK:
 
-[GarageLens-TeslaMate-v0.5.16-avg-speed-charge-power.apk](release-apk/GarageLens-TeslaMate-v0.5.16-avg-speed-charge-power.apk)
+[GarageLens-TeslaMate-v0.5.18-tracking-drives-fix.apk](release-apk/GarageLens-TeslaMate-v0.5.18-tracking-drives-fix.apk)
 
 The app can run with built-in mock data for UI review, or switch to a TeslaMate Reader API backed by the TeslaMate PostgreSQL database.
 

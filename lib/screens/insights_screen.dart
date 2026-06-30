@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/teslamate_models.dart';
@@ -7,9 +8,10 @@ import '../widgets/formatters.dart';
 import '../widgets/metric_tile.dart';
 
 class InsightsScreen extends StatelessWidget {
-  const InsightsScreen({required this.data, super.key});
+  const InsightsScreen({required this.data, this.dataListenable, super.key});
 
   final TeslamateDashboardData data;
+  final ValueListenable<TeslamateDashboardData>? dataListenable;
 
   @override
   Widget build(BuildContext context) {
@@ -18,14 +20,18 @@ class InsightsScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        _CoverageHeader(data: data),
+        _CoverageHeader(data: data, dataListenable: dataListenable),
         const SizedBox(height: 18),
         _SectionTitle(title: 'Dashboard groups'),
         const SizedBox(height: 10),
         ...modules.map(
           (module) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: _InsightModuleCard(data: data, module: module),
+            child: _InsightModuleCard(
+              data: data,
+              dataListenable: dataListenable,
+              module: module,
+            ),
           ),
         ),
       ],
@@ -40,6 +46,33 @@ enum _InsightModuleKind {
   efficiency,
   drives,
   system,
+}
+
+enum _InsightDetailFocus {
+  overview,
+  currentState,
+  chargingCost,
+  chargingCurves,
+  rangeLoss,
+  speedTemperature,
+  trackingDrives,
+  dataQuality,
+}
+
+class _InsightQuickLink {
+  const _InsightQuickLink({
+    required this.label,
+    required this.icon,
+    required this.module,
+    required this.focus,
+    required this.caption,
+  });
+
+  final String label;
+  final IconData icon;
+  final _InsightModule module;
+  final _InsightDetailFocus focus;
+  final String caption;
 }
 
 class _InsightModule {
@@ -101,12 +134,21 @@ class _InsightModule {
       coverage: ['Database Information', 'Statistics', 'Incomplete Data'],
     ),
   ];
+
+  static _InsightModule byKind(_InsightModuleKind kind) {
+    return all.firstWhere((module) => module.kind == kind);
+  }
 }
 
 class _InsightModuleCard extends StatelessWidget {
-  const _InsightModuleCard({required this.data, required this.module});
+  const _InsightModuleCard({
+    required this.data,
+    required this.module,
+    this.dataListenable,
+  });
 
   final TeslamateDashboardData data;
+  final ValueListenable<TeslamateDashboardData>? dataListenable;
   final _InsightModule module;
 
   @override
@@ -136,7 +178,11 @@ class _InsightModuleCard extends StatelessWidget {
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute<void>(
-              builder: (_) => _InsightDetailPage(data: data, module: module),
+              builder: (_) => _InsightDetailPage(
+                data: data,
+                dataListenable: dataListenable,
+                module: module,
+              ),
             ),
           );
         },
@@ -146,30 +192,54 @@ class _InsightModuleCard extends StatelessWidget {
 }
 
 class _InsightDetailPage extends StatelessWidget {
-  const _InsightDetailPage({required this.data, required this.module});
+  const _InsightDetailPage({
+    required this.data,
+    required this.module,
+    this.focus = _InsightDetailFocus.overview,
+    this.dataListenable,
+  });
 
   final TeslamateDashboardData data;
+  final ValueListenable<TeslamateDashboardData>? dataListenable;
   final _InsightModule module;
+  final _InsightDetailFocus focus;
 
   @override
   Widget build(BuildContext context) {
+    final listenable = dataListenable;
+    if (listenable == null) {
+      return _buildScaffold(data);
+    }
+
+    return ValueListenableBuilder<TeslamateDashboardData>(
+      valueListenable: listenable,
+      builder: (context, latestData, _) => _buildScaffold(latestData),
+    );
+  }
+
+  Widget _buildScaffold(TeslamateDashboardData data) {
+    final pageTitle = focus == _InsightDetailFocus.overview
+        ? module.title
+        : _focusTitle(focus);
+
     return Scaffold(
-      appBar: AppBar(title: Text(module.title)),
+      appBar: AppBar(title: Text(pageTitle)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          children: [
-            _DetailIntroCard(module: module),
-            const SizedBox(height: 18),
-            ..._buildSections(),
-          ],
+          children: [..._buildSections(data)],
         ),
       ),
     );
   }
 
-  List<Widget> _buildSections() {
+  List<Widget> _buildSections(TeslamateDashboardData data) {
     final analytics = data.analytics;
+
+    final focusedSections = _buildFocusedSections(data, analytics);
+    if (focusedSections != null) {
+      return focusedSections;
+    }
 
     return switch (module.kind) {
       _InsightModuleKind.vehicle => [
@@ -241,58 +311,156 @@ class _InsightDetailPage extends StatelessWidget {
       ],
     };
   }
+
+  List<Widget>? _buildFocusedSections(
+    TeslamateDashboardData data,
+    AnalyticsData analytics,
+  ) {
+    return switch (focus) {
+      _InsightDetailFocus.overview => null,
+      _InsightDetailFocus.currentState => [
+        const _SectionTitle(title: 'Current State'),
+        const SizedBox(height: 10),
+        _LiveTelemetryGrid(data: data),
+        const SizedBox(height: 10),
+        _CurrentStateDetailCard(data: data),
+        const SizedBox(height: 10),
+        _StateTimelineCard(segments: analytics.stateTimeline),
+      ],
+      _InsightDetailFocus.chargingCost => [
+        const _SectionTitle(title: 'Charging Cost'),
+        const SizedBox(height: 10),
+        _ChargingEconomics(data: analytics),
+        const SizedBox(height: 10),
+        _TopStationsCard(stations: analytics.topStations),
+      ],
+      _InsightDetailFocus.chargingCurves => [
+        const _SectionTitle(title: 'Charging Curves'),
+        const SizedBox(height: 10),
+        _ChargingCurveCard(curves: analytics.chargingCurves),
+        const SizedBox(height: 10),
+        _ChargeLevelCard(data: data),
+      ],
+      _InsightDetailFocus.rangeLoss => [
+        const _SectionTitle(title: 'Range Loss'),
+        const SizedBox(height: 10),
+        _BatteryRangeSection(data: analytics),
+        const SizedBox(height: 10),
+        _ProjectedRangeCard(data: data),
+        const SizedBox(height: 10),
+        _VampireDrainCard(data: data),
+      ],
+      _InsightDetailFocus.speedTemperature => [
+        const _SectionTitle(title: 'Speed Temperature'),
+        const SizedBox(height: 10),
+        _TemperatureHeatmap(points: analytics.speedTemperature),
+        const SizedBox(height: 10),
+        _SpeedRatesCard(buckets: analytics.speedRates),
+      ],
+      _InsightDetailFocus.trackingDrives => [
+        const _SectionTitle(title: 'Tracking Drives'),
+        const SizedBox(height: 10),
+        _TrackingDrivesDetailCard(data: data),
+        const SizedBox(height: 10),
+        _DriveStatsCard(data: data),
+      ],
+      _InsightDetailFocus.dataQuality => [
+        const _SectionTitle(title: 'Data Quality'),
+        const SizedBox(height: 10),
+        _DataQualityCard(summary: analytics.dataQuality),
+        const SizedBox(height: 10),
+        _DatabaseInfoCard(data: data),
+      ],
+    };
+  }
 }
 
-class _DetailIntroCard extends StatelessWidget {
-  const _DetailIntroCard({required this.module});
+String _focusTitle(_InsightDetailFocus focus) {
+  return switch (focus) {
+    _InsightDetailFocus.overview => 'Overview',
+    _InsightDetailFocus.currentState => 'Current State',
+    _InsightDetailFocus.chargingCost => 'Charging Cost',
+    _InsightDetailFocus.chargingCurves => 'Charging Curves',
+    _InsightDetailFocus.rangeLoss => 'Range Loss',
+    _InsightDetailFocus.speedTemperature => 'Speed Temperature',
+    _InsightDetailFocus.trackingDrives => 'Tracking Drives',
+    _InsightDetailFocus.dataQuality => 'Data Quality',
+  };
+}
 
-  final _InsightModule module;
+class _CurrentStateDetailCard extends StatelessWidget {
+  const _CurrentStateDetailCard({required this.data});
+
+  final TeslamateDashboardData data;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE8EFEA),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
-      ),
+    final vehicle = data.vehicle;
+    final drive = data.analytics.currentDrive;
+    final charge = data.analytics.currentCharge;
+
+    return Card(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(module.icon),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  module.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
+          ListTile(
+            leading: const Icon(Icons.directions_car_outlined),
+            title: const Text('Vehicle state'),
+            subtitle: Text('${vehicle.displayName} | ${vehicle.model}'),
+            trailing: Text(
+              _vehicleStateLabel(vehicle.state),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
           ),
-          const SizedBox(height: 10),
-          Text(module.subtitle),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: module.coverage
-                .map(
-                  (label) => Chip(
-                    label: Text(label),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                )
-                .toList(),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.place_outlined),
+            title: const Text('Current location'),
+            subtitle: Text(vehicle.locationName),
+            trailing: Text(
+              '${vehicle.latitude.toStringAsFixed(4)}, ${vehicle.longitude.toStringAsFixed(4)}',
+            ),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.bolt_outlined),
+            title: const Text('Power state'),
+            subtitle: Text(
+              vehicle.pluggedIn
+                  ? 'Plugged in | ${vehicle.powerKw.toStringAsFixed(1)} kW'
+                  : 'Unplugged | ${vehicle.powerKw.toStringAsFixed(1)} kW',
+            ),
+            trailing: Text(
+              charge.isCharging
+                  ? '${charge.minutesRemaining} min'
+                  : drive.isDriving
+                  ? '${drive.averageSpeedKmh.toStringAsFixed(0)} km/h'
+                  : 'Idle',
+            ),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.update),
+            title: const Text('Last sample'),
+            subtitle: const Text(
+              'From TeslaMate PostgreSQL through Reader API',
+            ),
+            trailing: Text(formatDate(vehicle.lastSeen)),
           ),
         ],
       ),
     );
   }
+}
+
+String _vehicleStateLabel(VehicleState state) {
+  return switch (state) {
+    VehicleState.online => 'Online',
+    VehicleState.asleep => 'Asleep',
+    VehicleState.charging => 'Charging',
+    VehicleState.offline => 'Offline',
+  };
 }
 
 class _LocationAndUpdatesCard extends StatelessWidget {
@@ -616,9 +784,169 @@ class _TripAndTrackingCard extends StatelessWidget {
             title: const Text('Tracking Drives'),
             subtitle: const Text('Energy consumed and elevation profile'),
             trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => _InsightDetailPage(
+                    data: data,
+                    module: _InsightModule.byKind(_InsightModuleKind.drives),
+                    focus: _InsightDetailFocus.trackingDrives,
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TrackingDrivesDetailCard extends StatelessWidget {
+  const _TrackingDrivesDetailCard({required this.data});
+
+  final TeslamateDashboardData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final drives = data.drives
+        .where(
+          (drive) =>
+              drive.energyKwh > 0 ||
+              drive.elevationCurve.isNotEmpty ||
+              drive.route.isNotEmpty,
+        )
+        .take(8)
+        .toList();
+
+    if (drives.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(14),
+          child: _NoDataBody(
+            message: 'No tracking drive samples have been returned yet.',
+          ),
+        ),
+      );
+    }
+
+    final totalEnergy = drives.fold<double>(
+      0,
+      (sum, drive) => sum + drive.energyKwh,
+    );
+    final maxElevation = drives
+        .expand((drive) => drive.elevationCurve)
+        .fold<double>(0, (max, point) => math.max(max, point.value));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CardTitle(
+              icon: Icons.landscape_outlined,
+              title: 'Energy consumed and elevation profile',
+              trailing: '${drives.length} drives',
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _CompactDriveMetric(
+                    label: 'Energy',
+                    value: '${totalEnergy.toStringAsFixed(1)} kWh',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _CompactDriveMetric(
+                    label: 'Elevation max',
+                    value: maxElevation > 0
+                        ? '${maxElevation.toStringAsFixed(0)} m'
+                        : 'No data',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            ...drives.map((drive) => _TrackingDriveRow(drive: drive)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactDriveMetric extends StatelessWidget {
+  const _CompactDriveMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackingDriveRow extends StatelessWidget {
+  const _TrackingDriveRow({required this.drive});
+
+  final DriveRecord drive;
+
+  @override
+  Widget build(BuildContext context) {
+    final elevationMax = drive.elevationCurve.fold<double>(
+      0,
+      (max, point) => math.max(max, point.value),
+    );
+
+    return Column(
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.route_outlined),
+          title: Text(
+            '${drive.startLocation} to ${drive.endLocation}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            '${drive.distanceKm.toStringAsFixed(1)} km / ${drive.energyKwh.toStringAsFixed(1)} kWh / ${drive.efficiencyWhPerKm} Wh/km',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: Text(
+            elevationMax > 0 ? '${elevationMax.toStringAsFixed(0)} m' : '--',
+          ),
+        ),
+        const Divider(height: 1),
+      ],
     );
   }
 }
@@ -692,9 +1020,10 @@ class _DatabaseInfoCard extends StatelessWidget {
 }
 
 class _CoverageHeader extends StatelessWidget {
-  const _CoverageHeader({required this.data});
+  const _CoverageHeader({required this.data, this.dataListenable});
 
   final TeslamateDashboardData data;
+  final ValueListenable<TeslamateDashboardData>? dataListenable;
 
   @override
   Widget build(BuildContext context) {
@@ -726,20 +1055,6 @@ class _CoverageHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              _HeaderPill(label: '22 official areas'),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: const [
-              _HeaderPill(label: 'Current state'),
-              _HeaderPill(label: 'Charging cost'),
-              _HeaderPill(label: 'Curves'),
-              _HeaderPill(label: 'Range loss'),
-              _HeaderPill(label: 'Speed temp'),
-              _HeaderPill(label: 'Data quality'),
             ],
           ),
           const SizedBox(height: 16),
@@ -768,30 +1083,179 @@ class _CoverageHeader extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          _QuickLinksStrip(
+            links: _buildQuickLinks(),
+            data: data,
+            dataListenable: dataListenable,
+          ),
         ],
+      ),
+    );
+  }
+
+  List<_InsightQuickLink> _buildQuickLinks() {
+    final vehicle = _InsightModule.byKind(_InsightModuleKind.vehicle);
+    final charging = _InsightModule.byKind(_InsightModuleKind.charging);
+    final battery = _InsightModule.byKind(_InsightModuleKind.battery);
+    final efficiency = _InsightModule.byKind(_InsightModuleKind.efficiency);
+    final system = _InsightModule.byKind(_InsightModuleKind.system);
+
+    return [
+      _InsightQuickLink(
+        label: 'Current state',
+        icon: Icons.directions_car_outlined,
+        module: vehicle,
+        focus: _InsightDetailFocus.currentState,
+        caption: 'Live status',
+      ),
+      _InsightQuickLink(
+        label: 'Charging cost',
+        icon: Icons.payments_outlined,
+        module: charging,
+        focus: _InsightDetailFocus.chargingCost,
+        caption: 'Energy spend',
+      ),
+      _InsightQuickLink(
+        label: 'Curves',
+        icon: Icons.show_chart,
+        module: charging,
+        focus: _InsightDetailFocus.chargingCurves,
+        caption: 'Charging power',
+      ),
+      _InsightQuickLink(
+        label: 'Range loss',
+        icon: Icons.trending_down,
+        module: battery,
+        focus: _InsightDetailFocus.rangeLoss,
+        caption: 'Battery health',
+      ),
+      _InsightQuickLink(
+        label: 'Speed temp',
+        icon: Icons.thermostat,
+        module: efficiency,
+        focus: _InsightDetailFocus.speedTemperature,
+        caption: 'Wh/km heatmap',
+      ),
+      _InsightQuickLink(
+        label: 'Data quality',
+        icon: Icons.health_and_safety_outlined,
+        module: system,
+        focus: _InsightDetailFocus.dataQuality,
+        caption: 'Missing rows',
+      ),
+    ];
+  }
+}
+
+class _QuickLinksStrip extends StatelessWidget {
+  const _QuickLinksStrip({
+    required this.links,
+    required this.data,
+    this.dataListenable,
+  });
+
+  final List<_InsightQuickLink> links;
+  final TeslamateDashboardData data;
+  final ValueListenable<TeslamateDashboardData>? dataListenable;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 76,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: links.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          return _QuickLinkButton(
+            link: links[index],
+            data: data,
+            dataListenable: dataListenable,
+          );
+        },
       ),
     );
   }
 }
 
-class _HeaderPill extends StatelessWidget {
-  const _HeaderPill({required this.label});
+class _QuickLinkButton extends StatelessWidget {
+  const _QuickLinkButton({
+    required this.link,
+    required this.data,
+    this.dataListenable,
+  });
 
-  final String label;
+  final _InsightQuickLink link;
+  final TeslamateDashboardData data;
+  final ValueListenable<TeslamateDashboardData>? dataListenable;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
+    return Semantics(
+      button: true,
+      label: 'Open ${link.label}',
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => _InsightDetailPage(
+                  data: data,
+                  dataListenable: dataListenable,
+                  module: link.module,
+                  focus: link.focus,
+                ),
+              ),
+            );
+          },
+          child: Container(
+            width: 152,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(link.icon, color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        link.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: Colors.white70,
+                      size: 18,
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  link.caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1261,6 +1725,9 @@ class _BatteryRangeSection extends StatelessWidget {
           points: data.rangeDegradation,
           color: const Color(0xFF8A3A3A),
           valueSuffix: ' km',
+          emptyMessage: hasCapacity || hasDegradation
+              ? 'Analytics chart data is still loading. Pull latest data or retry Reader API refresh.'
+              : 'No range degradation samples have been returned by Reader API.',
         ),
       ],
     );
@@ -1733,12 +2200,15 @@ class _LineChartCard extends StatelessWidget {
     required this.points,
     required this.color,
     this.valueSuffix = '',
+    this.emptyMessage =
+        'No line chart samples have been returned by Reader API.',
   });
 
   final String title;
   final List<ChartPoint> points;
   final Color color;
   final String valueSuffix;
+  final String emptyMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -1754,10 +2224,7 @@ class _LineChartCard extends StatelessWidget {
             _CardTitle(icon: Icons.show_chart, title: title, trailing: ''),
             const SizedBox(height: 12),
             if (!hasLine)
-              const _NoDataBody(
-                message:
-                    'No line chart samples have been returned by Reader API.',
-              )
+              _NoDataBody(message: emptyMessage)
             else ...[
               SizedBox(
                 height: 180,
